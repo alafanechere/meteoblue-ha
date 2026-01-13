@@ -23,9 +23,33 @@ logger = logging.getLogger(__name__)
 # Constants
 CONFIG_PATH = "/data/options.json"
 HASSIO_API = "http://supervisor/core/api"
+SUPERVISOR_API = "http://supervisor"
 METEOBLUE_API = "https://my.meteoblue.com/packages"
-MQTT_HOST = "core-mosquitto"
-MQTT_PORT = 1883
+
+
+async def get_mqtt_config() -> Dict[str, Any]:
+    """Get MQTT configuration from Supervisor."""
+    token = os.environ.get("SUPERVISOR_TOKEN")
+    if not token:
+        raise ValueError("SUPERVISOR_TOKEN not found")
+    
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.get(f"{SUPERVISOR_API}/services/mqtt", headers=headers) as resp:
+            if resp.status != 200:
+                raise ValueError(f"Failed to get MQTT config: {resp.status}")
+            data = await resp.json()
+            mqtt_data = data.get("data", {})
+            return {
+                "host": mqtt_data.get("host", "core-mosquitto"),
+                "port": mqtt_data.get("port", 1883),
+                "username": mqtt_data.get("username"),
+                "password": mqtt_data.get("password")
+            }
 
 
 class MeteoblueClient:
@@ -270,10 +294,21 @@ async def main():
 
     update_interval = config.get("update_interval", 30) * 60  # Convert to seconds
 
-    # Set up MQTT
-    mqtt_client = mqtt.Client()
+    # Get MQTT configuration from Supervisor
     try:
-        mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)
+        mqtt_config = await get_mqtt_config()
+        logger.info(f"Got MQTT config: host={mqtt_config['host']}, port={mqtt_config['port']}")
+    except Exception as e:
+        logger.error(f"Failed to get MQTT configuration: {e}")
+        sys.exit(1)
+
+    # Set up MQTT with callback API v2
+    mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    if mqtt_config.get("username"):
+        mqtt_client.username_pw_set(mqtt_config["username"], mqtt_config.get("password"))
+    
+    try:
+        mqtt_client.connect(mqtt_config["host"], mqtt_config["port"], 60)
         mqtt_client.loop_start()
         logger.info("Connected to MQTT broker")
     except Exception as e:
