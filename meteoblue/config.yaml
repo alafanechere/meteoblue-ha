@@ -2,13 +2,10 @@ name: "Meteoblue Weather"
 version: "1.0.0"
 slug: "meteoblue_weather"
 description: "Meteoblue weather integration with current conditions and forecast"
-url: "https://github.com/your-repo/meteoblue-ha-addon"
+url: "https://github.com/alafanechere/meteoblue-ha"
 arch:
-  - armhf
-  - armv7
   - aarch64
   - amd64
-  - i386
 init: false
 startup: application
 boot: auto
@@ -41,4 +38,4 @@ schema:
     precipitation: list(mm|inch)
   packages:
     - list(current|basic-1h|basic-3h|basic-day|sunmoon|agro-1h|wind|clouds|solar|air|trend)?
-image: "ghcr.io/your-repo/meteoblue-{arch}"
+image: "ghcr.io/alafanechere/meteoblue-{arch}"
