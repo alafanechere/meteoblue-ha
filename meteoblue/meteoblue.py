@@ -27,29 +27,15 @@ SUPERVISOR_API = "http://supervisor"
 METEOBLUE_API = "https://my.meteoblue.com/packages"
 
 
-async def get_mqtt_config() -> Dict[str, Any]:
-    """Get MQTT configuration from Supervisor."""
-    token = os.environ.get("SUPERVISOR_TOKEN")
-    if not token:
-        raise ValueError("SUPERVISOR_TOKEN not found")
-    
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
+def get_mqtt_config() -> Dict[str, Any]:
+    """Get MQTT configuration from environment or use defaults."""
+    # Home Assistant provides MQTT service info, or use default core-mosquitto
+    return {
+        "host": os.environ.get("MQTT_HOST", "core-mosquitto"),
+        "port": int(os.environ.get("MQTT_PORT", "1883")),
+        "username": os.environ.get("MQTT_USERNAME"),
+        "password": os.environ.get("MQTT_PASSWORD")
     }
-    
-    async with aiohttp.ClientSession() as session:
-        async with session.get(f"{SUPERVISOR_API}/services/mqtt", headers=headers) as resp:
-            if resp.status != 200:
-                raise ValueError(f"Failed to get MQTT config: {resp.status}")
-            data = await resp.json()
-            mqtt_data = data.get("data", {})
-            return {
-                "host": mqtt_data.get("host", "core-mosquitto"),
-                "port": mqtt_data.get("port", 1883),
-                "username": mqtt_data.get("username"),
-                "password": mqtt_data.get("password")
-            }
 
 
 class MeteoblueClient:
@@ -294,13 +280,9 @@ async def main():
 
     update_interval = config.get("update_interval", 30) * 60  # Convert to seconds
 
-    # Get MQTT configuration from Supervisor
-    try:
-        mqtt_config = await get_mqtt_config()
-        logger.info(f"Got MQTT config: host={mqtt_config['host']}, port={mqtt_config['port']}")
-    except Exception as e:
-        logger.error(f"Failed to get MQTT configuration: {e}")
-        sys.exit(1)
+    # Get MQTT configuration
+    mqtt_config = get_mqtt_config()
+    logger.info(f"Got MQTT config: host={mqtt_config['host']}, port={mqtt_config['port']}")
 
     # Set up MQTT with callback API v2
     mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
